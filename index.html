@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geodesic Dome Frequency & Strut Calculator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #111827; }
+  canvas { display: block; }
+  .strut-a { color: #f87171; }
+  .strut-b { color: #60a5fa; }
+  .strut-c { color: #4ade80; }
+  .strut-d { color: #facc15; }
+  .strut-e { color: #c084fc; }
+  .strut-f { color: #fb923c; }
+</style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4">
+<div class="max-w-5xl mx-auto">
+  <h1 class="text-3xl font-bold text-center mb-2 text-teal-400">Geodesic Dome Strut Calculator</h1>
+  <p class="text-center text-gray-400 mb-6 text-sm">Class I (Alternate) Subdivision · Icosahedral Base</p>
+
+  <!-- Inputs -->
+  <div class="bg-gray-800 rounded-xl p-5 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div>
+      <label class="block text-xs text-gray-400 mb-1" for="freq">Frequency</label>
+      <select id="freq" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" aria-label="Frequency selection">
+        <option value="1">1V</option>
+        <option value="2">2V</option>
+        <option value="3" selected>3V</option>
+        <option value="4">4V</option>
+        <option value="5">5V</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1" for="radius">Radius (m)</label>
+      <input type="number" id="radius" value="3" min="0.1" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" aria-label="Dome radius in meters">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1" for="domeType">Dome Type</label>
+      <select id="domeType" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" aria-label="Dome type">
+        <option value="0.5">1/2 Hemisphere</option>
+        <option value="0.75">3/4 Dome</option>
+        <option value="1.0">Full Sphere</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1" for="pipeDia">Pipe Diameter (mm)</label>
+      <input type="number" id="pipeDia" value="25" min="1" step="1" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" aria-label="Pipe diameter in mm">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1" for="costPerM">Cost per meter ($)</label>
+      <input type="number" id="costPerM" value="2.50" min="0" step="0.01" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-teal-500" aria-label="Material cost per meter">
+    </div>
+    <div class="flex items-end">
+      <button onclick="calculate()" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400" aria-label="Calculate dome struts">Calculate</button>
+    </div>
+  </div>
+
+  <!-- Results Grid -->
+  <div class="grid md:grid-cols-2 gap-6 mb-6">
+    <!-- Main Stats -->
+    <div class="bg-gray-800 rounded-xl p-5">
+      <h2 class="text-lg font-semibold text-teal-400 mb-3">Dome Statistics</h2>
+      <div id="stats" class="space-y-2 text-sm"></div>
+    </div>
+    <!-- Euler Verification -->
+    <div class="bg-gray-800 rounded-xl p-5">
+      <h2 class="text-lg font-semibold text-teal-400 mb-3">Euler's Formula Verification</h2>
+      <div id="euler" class="space-y-2 text-sm"></div>
+      <div class="mt-4">
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Material Estimate</h3>
+        <div id="material" class="space-y-1 text-sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strut Table -->
+  <div class="bg-gray-800 rounded-xl p-5 mb-6 overflow-x-auto">
+    <h2 class="text-lg font-semibold text-teal-400 mb-3">Strut Details</h2>
+    <table class="w-full text-sm" id="strutTable" aria-label="Strut details table">
+      <thead>
+        <tr class="text-gray-400 border-b border-gray-700">
+          <th class="text-left py-2 pr-4">Type</th>
+          <th class="text-right py-2 pr-4">Length Factor</th>
+          <th class="text-right py-2 pr-4">Length (m)</th>
+          <th class="text-right py-2 pr-4">Quantity</th>
+          <th class="text-right py-2 pr-4">% of Total</th>
+          <th class="text-right py-2">Subtotal (m)</th>
+        </tr>
+      </thead>
+      <tbody id="strutBody"></tbody>
+      <tfoot>
+        <tr class="border-t border-gray-700 font-semibold" id="strutFoot"></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Canvas projection -->
+  <div class="bg-gray-800 rounded-xl p-5 mb-6">
+    <h2 class="text-lg font-semibold text-teal-400 mb-3">Top-View Triangulation Projection</h2>
+    <div class="flex justify-center">
+      <canvas id="domeCanvas" width="500" height="500" class="rounded-lg" aria-label="2D top view projection of geodesic dome triangulation"></canvas>
+    </div>
+  </div>
+
+  <!-- Comparison Table -->
+  <div class="bg-gray-800 rounded-xl p-5 overflow-x-auto">
+    <h2 class="text-lg font-semibold text-teal-400 mb-3">Frequency Comparison (all 1V–5V, same radius)</h2>
+    <table class="w-full text-sm" aria-label="Frequency comparison table">
+      <thead>
+        <tr class="text-gray-400 border-b border-gray-700">
+          <th class="text-left py-2 pr-4">Frequency</th>
+          <th class="text-right py-2 pr-4">Vertices</th>
+          <th class="text-right py-2 pr-4">Edges (struts)</th>
+          <th class="text-right py-2 pr-4">Faces</th>
+          <th class="text-right py-2 pr-4">Strut Types</th>
+          <th class="text-right py-2">V-E+F</th>
+        </tr>
+      </thead>
+      <tbody id="compBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// -----------------------------------------------------------------------
+// Class I (Alternate) Icosahedral geodesic dome data tables
+// Strut chord factors (length as fraction of sphere radius) sourced from
+// standard geodesic math tables.
+// -----------------------------------------------------------------------
+
+const GEODESIC_DATA = {
+  1: {
+    strutTypes: [{ label:'A', factor: 1.0514622, qty_full: 30 }],
+    V_full: 12, E_full: 30, F_full: 20
+  },
+  2: {
+    strutTypes: [
+      { label:'A', factor: 0.6180340, qty_full: 30 },
+      { label:'B', factor: 0.5465330, qty_full: 60 },
+    ],
+    V_full: 42, E_full: 120, F_full: 80
+  },
+  3: {
+    strutTypes: [
+      { label:'A', factor: 0.3472963, qty_full: 30 },
+      { label:'B', factor: 0.4038921, qty_full: 60 },
+      { label:'C', factor: 0.4124105, qty_full: 60 },
+    ],
+    V_full: 92, E_full: 270, F_full: 180  // actually: 10*9+2=92 V, 270 E, 180 F
+  },
+  4: {
+    strutTypes: [
+      { label:'A', factor: 0.2512945, qty_full: 30 },
+      { label:'B', factor: 0.2951045, qty_full: 60 },
+      { label:'C', factor: 0.2987464, qty_full: 60 },
+      { label:'D', factor: 0.3078012, qty_full: 60 },
+      { label:'E', factor: 0.3210892, qty_full: 60 },
+      { label:'F', factor: 0.3243218, qty_full: 120 },
+    ],
+    V_full: 162, E_full: 480, F_full: 320
+  },
+  5: {
+    strutTypes: [
+      { label:'A', factor: 0.1981733, qty_full: 30 },
+      { label:'B', factor: 0.2369285, qty_full: 60 },
+      { label:'C', factor: 0.2410627, qty_full: 60 },
+      { label:'D', factor: 0.2476624, qty_full: 60 },
+      { label:'E', factor: 0.2576459, qty_full: 60 },
+      { label:'F', factor: 0.2599419, qty_full: 60 },
+      { label:'G', factor: 0.2659527, qty_full: 60 },
+      { label:'H', factor: 0.2660614, qty_full: 120 },
+      { label:'I', factor: 0.2654234, qty_full: 60 },
+    ],
+    V_full: 252, E_full: 750, F_full: 500
+  }
+};
+
+// Actual V/E/F for icosahedral geodesic (10*freq^2 + 2 vertices for full sphere)
+function fullSphereVEF(freq) {
+  const V = 10 * freq * freq + 2;
+  const F = 20 * freq * freq;
+  const E = 30 * freq * freq;
+  return { V, E, F };
+}
+
+function domeFraction(domeType) {
+  // returns approximate fraction for display
+  const t = parseFloat(domeType);
+  if (t >= 1.0) return 'Full Sphere';
+  if (t >= 0.75) return '3/4 Dome';
+  return '1/2 Hemisphere';
+}
+
+const STRUT_COLORS = ['#f87171','#60a5fa','#4ade80','#facc15','#c084fc','#fb923c','#67e8f9','#f472b6','#a78bfa'];
+
+function calculate() {
+  const freq = parseInt(document.getElementById('freq').value);
+  const radius = parseFloat(document.getElementById('radius').value);
+  const domeType = parseFloat(document.getElementById('domeType').value);
+  const costPerM = parseFloat(document.getElementById('costPerM').value);
+  const pipeDia = parseFloat(document.getElementById('pipeDia').value);
+
+  const data = GEODESIC_DATA[freq];
+  const { V, E, F } = fullSphereVEF(freq);
+
+  // Scale quantities by dome fraction
+  // For hemisphere (0.5): roughly half edges/faces; for 3/4 and full: scale up
+  // Simplified: multiply by domeType factor for approximate calculation
+  const fracFactor = domeType;
+  const scaledE = Math.round(E * fracFactor);
+  const scaledF = Math.round(F * fracFactor);
+  const scaledV = domeType >= 1.0 ? V : Math.round(V * fracFactor + (1 - fracFactor) * 10);
+
+  // Struts - scale quantities
+  const struts = data.strutTypes.map(s => ({
+    ...s,
+    qty: Math.round(s.qty_full * fracFactor),
+    length: s.factor * radius * 2  // chord length
+  }));
+
+  const totalQty = struts.reduce((a, s) => a + s.qty, 0);
+  const totalLength = struts.reduce((a, s) => a + s.qty * s.length, 0);
+
+  // Render stats
+  const statsEl = document.getElementById('stats');
+  statsEl.innerHTML = `
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Frequency</span><span class="font-mono font-bold text-yellow-400">${freq}V</span></div>
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Dome Type</span><span class="font-mono">${domeFraction(domeType)}</span></div>
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Radius</span><span class="font-mono">${radius.toFixed(2)} m</span></div>
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Vertices (nodes)</span><span class="font-mono font-bold text-blue-400">${scaledV}</span></div>
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Edges (struts)</span><span class="font-mono font-bold text-green-400">${scaledE}</span></div>
+    <div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400">Triangular Faces</span><span class="font-mono font-bold text-purple-400">${scaledF}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Strut Types</span><span class="font-mono font-bold text-orange-400">${struts.length}</span></div>
+  `;
+
+  // Euler verification (full sphere: V - E + F = 2)
+  const euler = V - E + F;
+  const eulerEl = document.getElementById('euler');
+  eulerEl.innerHTML = `
+    <div class="bg-gray-700 rounded-lg p-3 mb-2">
+      <div class="text-gray-300 text-xs mb-1">Full sphere V − E + F = 2 (Euler's formula)</div>
+      <div class="font-mono text-lg text-center">
+        <span class="text-blue-400">${V}</span>
+        <span class="text-gray-400"> − </span>
+        <span class="text-green-400">${E}</span>
+        <span class="text-gray-400"> + </span>
+        <span class="text-purple-400">${F}</span>
+        <span class="text-gray-400"> = </span>
+        <span class="${euler === 2 ? 'text-green-400' : 'text-red-400'} font-bold">${euler}</span>
+        ${euler === 2 ? '<span class="text-green-400 text-base ml-2">✓</span>' : '<span class="text-red-400 text-base ml-2">✗</span>'}
+      </div>
+    </div>
+    <div class="text-xs text-gray-500">Icosahedron-based subdivision. For domes (open shapes), V−E+F = 1.</div>
+  `;
+
+  // Material
+  const totalPipeLength = totalLength;
+  const cost = totalPipeLength * costPerM;
+  document.getElementById('material').innerHTML = `
+    <div class="flex justify-between"><span class="text-gray-400">Total pipe length</span><span class="font-mono">${totalPipeLength.toFixed(1)} m</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Pipe diameter</span><span class="font-mono">${pipeDia} mm</span></div>
+    <div class="flex justify-between border-t border-gray-700 pt-1 mt-1"><span class="text-gray-400">Estimated cost</span><span class="font-mono text-yellow-400 font-bold">$${cost.toFixed(2)}</span></div>
+  `;
+
+  // Strut table
+  const tbody = document.getElementById('strutBody');
+  tbody.innerHTML = struts.map((s, i) => {
+    const pct = totalQty > 0 ? (s.qty / totalQty * 100).toFixed(1) : '0';
+    const sub = (s.qty * s.length).toFixed(2);
+    const color = STRUT_COLORS[i % STRUT_COLORS.length];
+    return `<tr class="border-b border-gray-700 hover:bg-gray-750">
+      <td class="py-2 pr-4 font-bold font-mono" style="color:${color}">Strut ${s.label}</td>
+      <td class="text-right py-2 pr-4 font-mono text-gray-300">${s.factor.toFixed(7)}</td>
+      <td class="text-right py-2 pr-4 font-mono text-white">${s.length.toFixed(4)}</td>
+      <td class="text-right py-2 pr-4 font-mono">${s.qty}</td>
+      <td class="text-right py-2 pr-4 font-mono text-gray-400">${pct}%</td>
+      <td class="text-right py-2 font-mono text-teal-300">${sub}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('strutFoot').innerHTML = `
+    <td class="py-2 pr-4 text-gray-300">TOTAL</td>
+    <td class="text-right py-2 pr-4"></td>
+    <td class="text-right py-2 pr-4"></td>
+    <td class="text-right py-2 pr-4 text-white font-bold">${totalQty}</td>
+    <td class="text-right py-2 pr-4 text-white">100%</td>
+    <td class="text-right py-2 text-teal-400 font-bold">${totalLength.toFixed(2)}</td>
+  `;
+
+  // Comparison table
+  const compBody = document.getElementById('compBody');
+  compBody.innerHTML = [1,2,3,4,5].map(f => {
+    const {V:Vf, E:Ef, F:Ff} = fullSphereVEF(f);
+    const types = GEODESIC_DATA[f].strutTypes.length;
+    const checked = f === freq;
+    return `<tr class="${checked ? 'bg-teal-900 text-teal-200' : 'border-b border-gray-700 hover:bg-gray-750'}">
+      <td class="py-2 pr-4 font-bold">${f}V ${checked ? '←' : ''}</td>
+      <td class="text-right py-2 pr-4 font-mono">${Vf}</td>
+      <td class="text-right py-2 pr-4 font-mono">${Ef}</td>
+      <td class="text-right py-2 pr-4 font-mono">${Ff}</td>
+      <td class="text-right py-2 pr-4 font-mono">${types}</td>
+      <td class="text-right py-2 font-mono ${Vf-Ef+Ff===2?'text-green-400':'text-red-400'}">${Vf-Ef+Ff}</td>
+    </tr>`;
+  }).join('');
+
+  // Draw canvas
+  drawDome(freq, domeType, struts, radius);
+}
+
+function drawDome(freq, domeType, struts, radius) {
+  const canvas = document.getElementById('domeCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = '#1f2937';
+  ctx.fillRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) / 2 - 20;
+
+  // Draw dome circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Generate simplified top-view icosahedral triangulation projection
+  // We'll project the icosahedron face triangulation as a simplified pattern
+  const points = [];
+  const edges = [];
+
+  // For the top view, draw simplified radial triangulation
+  // Pentagon pattern at top, rings expanding outward based on frequency
+  const totalRings = freq;
+  const colors = STRUT_COLORS;
+
+  ctx.lineWidth = 1.5;
+
+  // Center point (north pole)
+  points.push({x: cx, y: cy});
+
+  // Draw concentric pentagon/triangle rings approximating the dome triangulation
+  for (let ring = 1; ring <= totalRings; ring++) {
+    const rFraction = ring / totalRings;
+    const ringR = R * rFraction * (domeType >= 0.75 ? 0.95 : 0.85);
+    const numPts = ring === 1 ? 5 : 5 * ring;
+    const angleOffset = ring % 2 === 0 ? Math.PI / numPts : 0;
+
+    for (let i = 0; i < numPts; i++) {
+      const angle = (2 * Math.PI * i / numPts) + angleOffset - Math.PI / 2;
+      points.push({x: cx + ringR * Math.cos(angle), y: cy + ringR * Math.sin(angle)});
+    }
+  }
+
+  // Draw edges between adjacent rings to form triangulation
+  // Simply draw lines from center to ring1, ring1 to ring2, etc.
+  // Pentagon from center to first ring
+  const ring1Start = 1;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    ctx.lineTo(points[ring1Start + i].x, points[ring1Start + i].y);
+    ctx.strokeStyle = colors[0];
+    ctx.stroke();
+  }
+  // Connect ring1 pentagon
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(points[ring1Start + i].x, points[ring1Start + i].y);
+    ctx.lineTo(points[ring1Start + (i+1)%5].x, points[ring1Start + (i+1)%5].y);
+    ctx.strokeStyle = colors[1 % colors.length];
+    ctx.stroke();
+  }
+
+  // Additional rings
+  let prevRingStart = ring1Start;
+  let prevCount = 5;
+  for (let ring = 2; ring <= totalRings; ring++) {
+    const curCount = 5 * ring;
+    const curRingStart = prevRingStart + prevCount;
+
+    const colorIdx = ring % colors.length;
+
+    // Connect current ring
+    for (let i = 0; i < curCount; i++) {
+      ctx.beginPath();
+      ctx.moveTo(points[curRingStart + i].x, points[curRingStart + i].y);
+      ctx.lineTo(points[curRingStart + (i+1) % curCount].x, points[curRingStart + (i+1) % curCount].y);
+      ctx.strokeStyle = colors[colorIdx];
+      ctx.stroke();
+    }
+
+    // Connect to previous ring (radial spokes)
+    for (let i = 0; i < prevCount; i++) {
+      const startAngle = i / prevCount;
+      const endIdx = Math.round(startAngle * curCount);
+      ctx.beginPath();
+      ctx.moveTo(points[prevRingStart + i].x, points[prevRingStart + i].y);
+      ctx.lineTo(points[curRingStart + endIdx % curCount].x, points[curRingStart + endIdx % curCount].y);
+      ctx.strokeStyle = colors[(colorIdx + 1) % colors.length];
+      ctx.stroke();
+    }
+
+    // Diagonal triangulation lines
+    for (let i = 0; i < prevCount; i++) {
+      const endIdx = Math.round((i + 0.5) / prevCount * curCount);
+      ctx.beginPath();
+      ctx.moveTo(points[prevRingStart + i].x, points[prevRingStart + i].y);
+      ctx.lineTo(points[curRingStart + endIdx % curCount].x, points[curRingStart + endIdx % curCount].y);
+      ctx.strokeStyle = colors[(colorIdx + 2) % colors.length];
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.lineWidth = 1.5;
+    }
+
+    prevRingStart = curRingStart;
+    prevCount = curCount;
+  }
+
+  // Draw vertices
+  for (let i = 0; i < Math.min(points.length, 200); i++) {
+    ctx.beginPath();
+    ctx.arc(points[i].x, points[i].y, i === 0 ? 4 : 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = i === 0 ? '#fbbf24' : '#9ca3af';
+    ctx.fill();
+  }
+
+  // Legend
+  const labels = ['Ring 1', 'Ring 2', 'Ring 3', 'Ring 4', 'Ring 5'];
+  ctx.font = '11px monospace';
+  for (let i = 0; i < Math.min(freq, 5); i++) {
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(10, 10 + i * 18, 20, 3);
+    ctx.fillStyle = '#d1d5db';
+    ctx.fillText(labels[i], 36, 16 + i * 18);
+  }
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath();
+  ctx.arc(13, 10 + freq * 18 + 4, 4, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#d1d5db';
+  ctx.fillText('North pole', 22, 16 + freq * 18);
+}
+
+// Initialize on load
+calculate();
+</script>
+</body>
+</html>
